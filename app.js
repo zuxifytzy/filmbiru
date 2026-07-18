@@ -162,7 +162,7 @@ async function doLogin(name, password) {
   try {
     const response = await fetch(`${API_BASE}/api/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: finalName, password: finalPass })
+      body: JSON.stringify({ name: finalName, password: finalPass, userAgent: navigator.userAgent })
     });
     const data = await response.json();
 
@@ -1673,7 +1673,11 @@ async function restoreSession() {
   const savedSessionId = sessionStorage.getItem('lb_session_id') || null;
 
   try {
-    const res  = await fetch(`${API_BASE}/api/verify`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+    const res  = await fetch(`${API_BASE}/api/verify`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isRestore: true, isRefresh, userAgent: navigator.userAgent })
+    });
     const data = await res.json();
     if (!data.success) { deleteCookie('lb_token'); sessionStorage.removeItem('lb_token'); sessionStorage.removeItem('lb_session_id'); authToken = null; return; }
     currentUser = data.user;
