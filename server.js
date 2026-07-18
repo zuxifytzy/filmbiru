@@ -20,20 +20,31 @@ app.use(express.static(__dirname));
 // ===========================
 // CONFIG
 // ===========================
-const JWT_SECRET = process.env.JWT_SECRET || 'layarbiru_secret_key_2024';
+// ===========================
+// SECURITY: Semua secret WAJIB dari environment variable.
+// Server akan crash jika tidak diset — ini disengaja agar
+// tidak pernah jalan tanpa konfigurasi yang aman.
+// ===========================
+if (!process.env.JWT_SECRET)      throw new Error('[FATAL] JWT_SECRET wajib diset di environment variable!');
+if (!process.env.ADMIN_PASSWORD)  throw new Error('[FATAL] ADMIN_PASSWORD wajib diset di environment variable!');
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const ADMIN_USER = {
-  name:     process.env.ADMIN_NAME || 'Admin Layar Biru',
+  name:     process.env.ADMIN_NAME || 'Admin',
   initial:  'AL',
   role:     'admin',
-  password: process.env.ADMIN_PASSWORD || 'Bayu.0905'
+  password: process.env.ADMIN_PASSWORD
 };
 
 // ===========================
 // GOOGLE DRIVE CONFIG
 // ===========================
-const GDRIVE_API_KEY   = process.env.GDRIVE_API_KEY   || 'AIzaSyB8MY-5lLPOirCFvXO8qEwHgY5zntv0m4c';
-const GDRIVE_FOLDER_ID = process.env.GDRIVE_FOLDER_ID || '1RjxjqHRT6X9sU8rH87pfzz6hr-VlKet-';
+if (!process.env.GDRIVE_API_KEY)   throw new Error('[FATAL] GDRIVE_API_KEY wajib diset di environment variable!');
+if (!process.env.GDRIVE_FOLDER_ID) throw new Error('[FATAL] GDRIVE_FOLDER_ID wajib diset di environment variable!');
+
+const GDRIVE_API_KEY   = process.env.GDRIVE_API_KEY;
+const GDRIVE_FOLDER_ID = process.env.GDRIVE_FOLDER_ID;
 
 // Cache film dari GDrive agar tidak hit API setiap request
 let gdriveFilmsCache = [];
@@ -480,10 +491,11 @@ app.get('/api/health', (req, res) => {
 });
 
 app.post('/api/check-admin', (req, res) => {
-  const { name } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ success: false, isAdmin: false, message: 'Nama wajib diisi.' });
-  const isAdmin = name.trim().toLowerCase() === 'admin';
-  res.json({ success: true, isAdmin, message: isAdmin ? 'Admin terdeteksi' : 'Bukan admin' });
+  // SECURITY FIX: Selalu return response yang sama — jangan pernah konfirmasi
+  // apakah suatu nama adalah admin. Ini mencegah username enumeration.
+  // Frontend tetap bisa tampilkan password field berdasarkan logika lokal,
+  // tapi server tidak mengkonfirmasi apapun.
+  res.json({ success: true, isAdmin: false, message: 'Gunakan form login.' });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -681,6 +693,11 @@ app.get('/api/sessions/stream', (req, res) => {
 
 // GET /api/films — ambil film dari Google Drive folder
 app.get('/api/films', async (req, res) => {
+  // SECURITY FIX: Wajib login sebelum bisa lihat daftar film
+  const token = (req.headers['authorization'] || '').split(' ')[1];
+  if (!token) return res.status(401).json({ success: false, message: 'Unauthorized' });
+  try { jwt.verify(token, JWT_SECRET); } catch { return res.status(401).json({ success: false, message: 'Token tidak valid' }); }
+
   try {
     const films = await fetchGDriveFilms();
     res.json({ success: true, films, source: 'gdrive' });
@@ -786,6 +803,12 @@ async function resolveGDriveDirectUrl(fileId) {
 }
 
 app.get('/api/proxy-video', async (req, res) => {
+  // SECURITY FIX: Wajib token valid sebelum proxy video
+  const token = (req.headers['authorization'] || '').split(' ')[1]
+             || req.query.token; // fallback query param untuk <video src="...?token=">
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try { jwt.verify(token, JWT_SECRET); } catch { return res.status(401).json({ error: 'Token tidak valid' }); }
+
   const fileId = req.query.id;
   if (!fileId) return res.status(400).json({ error: 'Parameter id wajib diisi' });
 
