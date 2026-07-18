@@ -499,11 +499,44 @@ app.post('/api/check-admin', (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { name, password } = req.body;
+  const { name, password, userAgent } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ success: false, code: 'MISSING_NAME', message: 'Nama wajib diisi.' });
 
   const trimmedName      = name.trim();
   const trimmedNameLower = trimmedName.toLowerCase();
+
+  // Parse browser & OS dari user-agent
+  function parseBrowser(ua = '') {
+    if (!ua) return { browser: 'Unknown', os: 'Unknown', device: 'Unknown' };
+    let browser = 'Unknown';
+    if      (ua.includes('EdgA') || ua.includes('EdgiOS')) browser = 'Edge Mobile';
+    else if (ua.includes('Edg/'))  browser = 'Edge';
+    else if (ua.includes('OPR/') || ua.includes('OPiOS')) browser = 'Opera';
+    else if (ua.includes('SamsungBrowser')) browser = 'Samsung Browser';
+    else if (ua.includes('UCBrowser')) browser = 'UC Browser';
+    else if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('CriOS')) browser = 'Chrome iOS';
+    else if (ua.includes('Chrome')) browser = 'Chrome';
+    else if (ua.includes('Safari')) browser = 'Safari';
+
+    let os = 'Unknown';
+    if      (ua.includes('Windows NT 10')) os = 'Windows 10/11';
+    else if (ua.includes('Windows NT 6')) os = 'Windows 7/8';
+    else if (ua.includes('iPhone'))  os = 'iPhone';
+    else if (ua.includes('iPad'))    os = 'iPad';
+    else if (ua.includes('Android')) {
+      const ver = ua.match(/Android ([\d.]+)/);
+      os = ver ? `Android ${ver[1]}` : 'Android';
+    }
+    else if (ua.includes('Mac OS X')) os = 'macOS';
+    else if (ua.includes('Linux'))   os = 'Linux';
+
+    const device = (ua.includes('Mobile') || ua.includes('iPhone') || ua.includes('Android') && !ua.includes('Tablet')) ? '📱 HP' : '💻 Desktop';
+    return { browser, os, device };
+  }
+
+  const ua      = userAgent || req.headers['user-agent'] || '';
+  const { browser, os, device } = parseBrowser(ua);
 
   if (trimmedNameLower === 'administrator') {
     if (!password) return res.status(401).json({ success: false, code: 'PASSWORD_REQUIRED', message: 'Password admin wajib diisi.' });
@@ -518,8 +551,6 @@ app.post('/api/login', async (req, res) => {
 
   const initial = generateInitial(trimmedName);
   for (const [oldToken, s] of activeSessions) {
-    // FIX Bug 5: field yang benar adalah s.user.name, bukan s.name
-    // Sebelumnya sesi lama tidak pernah dihapus → pengguna sama bisa punya 2 sesi aktif
     if (s.user && s.user.name.toLowerCase() === trimmedNameLower) activeSessions.delete(oldToken);
   }
 
@@ -527,14 +558,10 @@ app.post('/api/login', async (req, res) => {
   addServerLog(trimmedName, 'baru saja masuk ke platform', '#4ADE80', 'connect');
   broadcastNewLogin({ name: trimmedName, initial, role: 'viewer' });
 
-  // FIX: totalSesi dihitung SETELAH sesi ditambahkan di /api/session/start,
-  // tapi karena login dan session/start terpisah, kita hitung activeSessions.size + 1
-  // sebagai estimasi (pengguna ini belum terdaftar di activeSessions saat login).
-  // Notifikasi di-await agar error tidak diam-diam terlewat.
   const waktu     = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Makassar' });
-  const totalSesi = activeSessions.size + 1; // +1 karena pengguna ini belum masuk activeSessions
+  const totalSesi = activeSessions.size + 1;
   sendTelegramNotif(
-`🟢 <b>Pengguna Baru Masuk</b>\n\n👤 <b>Nama</b>    : ${trimmedName}\n🕐 <b>Waktu</b>   : ${waktu} WITA\n📊 <b>Sesi aktif</b>: ${totalSesi} pengguna\n\n— <i>Layar Biru Dashboard</i>`
+`🟢 <b>Pengguna Baru Masuk</b>\n\n👤 <b>Nama</b>       : ${trimmedName}\n🕐 <b>Waktu</b>      : ${waktu} WITA\n${device} <b>Perangkat</b> : ${os}\n🌐 <b>Browser</b>   : ${browser}\n📊 <b>Sesi aktif</b>: ${totalSesi} pengguna\n\n— <i>Layar Biru Dashboard</i>`
   ).catch(e => console.error('[TELEGRAM] Login notif gagal:', e.message));
 
   res.json({ success: true, token, user: { name: trimmedName, initial, role: 'viewer' } });
@@ -546,6 +573,51 @@ app.get('/api/verify', (req, res) => {
   try { res.json({ success:true, user: jwt.verify(token, JWT_SECRET) }); }
   catch { res.status(401).json({ success:false }); }
 });
+
+// POST /api/verify — dipakai saat restore session, kirim notif Telegram jika bukan refresh
+app.post('/api/verify', async (req, res) => {
+  const token = (req.headers['authorization']||'').split(' ')[1];
+  if (!token) return res.status(401).json({ success:false });
+  try {
+    const user = jwt.verify(token, JWT_SECRET);
+    res.json({ success:true, user });
+
+    // Kirim notif Telegram hanya untuk viewer dan hanya jika bukan refresh tab
+    const { isRestore, isRefresh, userAgent: ua } = req.body || {};
+    if (isRestore && !isRefresh && user.role === 'viewer') {
+      function parseBrowser(ua = '') {
+        if (!ua) return { browser: 'Unknown', os: 'Unknown', device: 'Unknown' };
+        let browser = 'Unknown';
+        if      (ua.includes('EdgA') || ua.includes('EdgiOS')) browser = 'Edge Mobile';
+        else if (ua.includes('Edg/'))  browser = 'Edge';
+        else if (ua.includes('OPR/') || ua.includes('OPiOS')) browser = 'Opera';
+        else if (ua.includes('SamsungBrowser')) browser = 'Samsung Browser';
+        else if (ua.includes('UCBrowser')) browser = 'UC Browser';
+        else if (ua.includes('Firefox')) browser = 'Firefox';
+        else if (ua.includes('CriOS')) browser = 'Chrome iOS';
+        else if (ua.includes('Chrome')) browser = 'Chrome';
+        else if (ua.includes('Safari')) browser = 'Safari';
+        let os = 'Unknown';
+        if      (ua.includes('Windows NT 10')) os = 'Windows 10/11';
+        else if (ua.includes('Windows NT 6')) os = 'Windows 7/8';
+        else if (ua.includes('iPhone'))  os = 'iPhone';
+        else if (ua.includes('iPad'))    os = 'iPad';
+        else if (ua.includes('Android')) { const v = ua.match(/Android ([\d.]+)/); os = v ? `Android ${v[1]}` : 'Android'; }
+        else if (ua.includes('Mac OS X')) os = 'macOS';
+        else if (ua.includes('Linux'))   os = 'Linux';
+        const device = (ua.includes('Mobile') || ua.includes('iPhone') || (ua.includes('Android') && !ua.includes('Tablet'))) ? '📱 HP' : '💻 Desktop';
+        return { browser, os, device };
+      }
+      const { browser, os, device } = parseBrowser(ua || req.headers['user-agent'] || '');
+      const waktu     = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Makassar' });
+      const totalSesi = activeSessions.size + 1;
+      sendTelegramNotif(
+`🔄 <b>Pengguna Kembali (Sesi Lama)</b>\n\n👤 <b>Nama</b>       : ${user.name}\n🕐 <b>Waktu</b>      : ${waktu} WITA\n${device} <b>Perangkat</b> : ${os}\n🌐 <b>Browser</b>   : ${browser}\n📊 <b>Sesi aktif</b>: ${totalSesi} pengguna\n\n— <i>Layar Biru Dashboard</i>`
+      ).catch(e => console.error('[TELEGRAM] Restore notif gagal:', e.message));
+    }
+  } catch { res.status(401).json({ success:false }); }
+});
+
 
 app.post('/api/session/start', (req, res) => {
   const token = (req.headers['authorization']||'').split(' ')[1];
