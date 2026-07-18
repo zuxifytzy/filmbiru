@@ -935,12 +935,8 @@ async function warnSession(sessionId) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
       body: JSON.stringify({ sessionId })
     });
-    if (!res.ok) {
-      // Fallback via socket jika REST gagal
-      if (socket) socket.emit('kick-viewer', { sessionId });
-    }
+    if (!res.ok && socket) socket.emit('kick-viewer', { sessionId });
   } catch (e) {
-    // Fallback via socket jika network error
     if (socket) socket.emit('kick-viewer', { sessionId });
   }
 }
