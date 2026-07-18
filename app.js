@@ -118,7 +118,7 @@ async function checkAndLogin() {
   if (!name) { showLoginError('Nama wajib diisi.', nameEl); return; }
 
   // Cek lokal — tidak perlu tanya server agar tidak bocorkan info admin
-  if (name.toLowerCase() === 'admin') {
+  if (name.toLowerCase() === 'administrator') {
     passSection.style.display   = 'block';
     adminDetected.style.display = 'block';
     passEl.focus();
