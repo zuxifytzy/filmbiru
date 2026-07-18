@@ -495,6 +495,15 @@ function _adminAttachStream(videoEl, stream) {
 }
 
 function connectSocket_Admin() {
+  // FIX: Matikan socket lama sebelum buat yang baru.
+  // Tanpa ini, setiap refresh/restore memanggil enterAdminDashboard()
+  // lagi dan membuat socket kedua — menyebabkan log admin connect/disconnect ganda.
+  if (socket) {
+    socket.off(); // hapus semua listener agar tidak dobel
+    socket.disconnect();
+    socket = null;
+  }
+
   socket = io(API_BASE, {
     auth: { token: authToken },
     transports: ['websocket', 'polling'],
