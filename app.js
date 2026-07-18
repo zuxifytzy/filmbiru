@@ -335,13 +335,13 @@ function renderAdminSessions(sessions) {
       if (pe && vEl) {
         pe.videoEl = vEl;
         const hasVideo = pe.remoteStream && pe.remoteStream.getVideoTracks().length > 0;
-        // BUG FIX #7 (Black Screen): Perluas kondisi isBlank — readyState < 2 lebih reliable
-        // dari vEl.paused saja karena video baru di-attach belum tentu langsung paused=true.
-        // Juga paksa srcObject = null dulu sebelum re-attach agar browser benar-benar reset.
-        const isBlank  = !vEl.srcObject || vEl.videoWidth === 0 || vEl.readyState < 2;
+        // isBlank: pakai _everPlayed — flag reliable yang di-set saat event 'playing' fire.
+        // videoWidth===0 dan readyState<2 adalah FALSE POSITIVE untuk WebRTC MediaStream
+        // karena browser baru mengisinya setelah frame pertama, yang tidak sempat terjadi
+        // jika watchdog terus-menerus mereset srcObject sebelum frame bisa render.
+        const isBlank = !vEl.srcObject || (vEl.paused && !vEl._everPlayed);
         if (hasVideo && isBlank) {
-          console.log(`[SSE-reattach] ${s.id} — re-attach stream (readyState=${vEl.readyState}, videoWidth=${vEl.videoWidth})`);
-          vEl.srcObject = null; // reset dulu agar browser tidak skip attach
+          console.log(`[SSE-reattach] ${s.id} — re-attach stream (_everPlayed=${vEl._everPlayed})`);
           _adminAttachStream(vEl, pe.remoteStream);
         }
       }
@@ -429,16 +429,31 @@ function _ensureAdminCard(sessionId, user) {
 function _adminAttachStream(videoEl, stream) {
   if (!videoEl || !stream) return;
 
-  // Pastikan stream punya track aktif sebelum attach
-  const activeTracks = stream.getTracks().filter(t => t.readyState === 'live');
-  if (activeTracks.length === 0) {
-    console.warn('[AttachStream] Stream tidak punya track live, skip attach');
+  // Cukup cek video track live — audio track bisa sudah live duluan
+  const hasLiveVideo = stream.getVideoTracks().some(t => t.readyState === 'live');
+  if (!hasLiveVideo) {
+    console.warn('[AttachStream] Tidak ada video track live, skip attach');
     return;
   }
+
+  // LOCK: cegah cascade simultaneous attach yang jadi root cause blank hitam.
+  // Jika attach sedang berjalan (dalam 7s cooldown), tolak panggilan duplikat.
+  if (videoEl._attachLock) {
+    console.log('[AttachStream] Lock aktif, skip attach duplikat');
+    return;
+  }
+  videoEl._attachLock = true;
+  setTimeout(() => { videoEl._attachLock = false; }, 7000);
+
+  // Reset flag "pernah playing" — dipakai watchdog untuk deteksi blank yang akurat
+  videoEl._everPlayed = false;
 
   videoEl.muted     = true; // wajib muted untuk autoplay policy mobile
   videoEl.srcObject = null;
   videoEl.srcObject = stream;
+
+  // Catat saat video berhasil play pertama kali
+  videoEl.addEventListener('playing', () => { videoEl._everPlayed = true; }, { once: true });
 
   const showTapOverlay = () => {
     const c = videoEl.closest('.sc-video-container');
@@ -467,17 +482,16 @@ function _adminAttachStream(videoEl, stream) {
   if (videoEl.readyState >= 1) doPlay();
   else videoEl.addEventListener('loadedmetadata', doPlay, { once: true });
 
-  // FIX: Retry play lebih agresif — 1s, 3s, 5s
-  // Mobile Chrome kadang butuh beberapa attempt sebelum autoplay diizinkan
-  [1000, 3000, 5000].forEach(ms => {
-    setTimeout(() => {
-      if (!videoEl.srcObject) return; // stream sudah diganti, skip
-      if (videoEl.paused || videoEl.readyState < 2) {
-        console.warn(`[AttachStream] Retry play ${ms}ms — paused=${videoEl.paused} readyState=${videoEl.readyState}`);
-        doPlay();
-      }
-    }, ms);
-  });
+  // Satu retry saja di 2.5s — cukup untuk handle autoplay policy mobile.
+  // Retry 1s/3s/5s DIHAPUS: tumpang tindih dengan watchdog luar → cascade reset
+  // yang menyebabkan srcObject direset terus sebelum frame sempat render → blank hitam.
+  setTimeout(() => {
+    if (!videoEl.srcObject) return;
+    if (videoEl.paused && !videoEl._everPlayed) {
+      console.warn('[AttachStream] Retry 2.5s — video belum pernah play');
+      doPlay();
+    }
+  }, 2500);
 }
 
 function connectSocket_Admin() {
@@ -535,10 +549,9 @@ function connectSocket_Admin() {
           adminPeers.forEach((pe, sessionId) => {
             const vEl = document.getElementById(`video-${sessionId}`);
             if (vEl && pe.remoteStream && pe.remoteStream.getVideoTracks().length > 0) {
-              const isBlank = !vEl.srcObject || vEl.videoWidth === 0 || vEl.readyState < 2 || vEl.paused;
+              const isBlank = !vEl.srcObject || (vEl.paused && !vEl._everPlayed);
               if (isBlank) {
                 console.warn(`[Visibility] Re-attach stream ${sessionId}`);
-                vEl.srcObject = null;
                 _adminAttachStream(vEl, pe.remoteStream);
               }
             }
@@ -732,24 +745,24 @@ async function setupPeerConnection_Admin(sessionId, user) {
         if (pe) pe.videoEl = vEl;
         _adminAttachStream(vEl, remoteStream);
 
-        // FIX: Watchdog ontrack — jika 2 detik setelah track datang video masih blank,
-        // paksa re-attach. Menangkap kasus ontrack fire tapi play() diblokir autoplay policy.
+        // Watchdog ontrack: jika 4s setelah track datang video belum pernah play,
+        // coba attach ulang. Delay 4s (bukan 2s) agar tidak bentrok dengan retry 2.5s
+        // di _adminAttachStream. _attachLock akan otomatis lepas di 7s.
         setTimeout(() => {
           const vEl2 = document.getElementById(`video-${sessionId}`);
           if (!vEl2) return;
-          const isBlank = !vEl2.srcObject || vEl2.videoWidth === 0 || vEl2.paused || vEl2.readyState < 2;
+          const isBlank = !vEl2.srcObject || (vEl2.paused && !vEl2._everPlayed);
           if (isBlank) {
-            console.warn(`[ontrack-watchdog] ${sessionId} masih blank 2s setelah ontrack — re-attach`);
-            vEl2.srcObject = null;
+            console.warn(`[ontrack-watchdog] ${sessionId} masih blank 4s setelah ontrack — re-attach`);
             _adminAttachStream(vEl2, remoteStream);
           }
-        }, 2000);
+        }, 4000);
       }
 
-      // Jika track sempat mute lalu unmute (misal network glitch), re-attach
+      // Jika track sempat mute lalu unmute (network glitch), coba play ulang tanpa reset srcObject
       evt.track.onunmute = () => {
         const el2 = document.getElementById(`video-${sessionId}`);
-        if (el2) { el2.srcObject = null; el2.srcObject = remoteStream; el2.play().catch(() => {}); }
+        if (el2 && el2.paused) el2.play().catch(() => {});
       };
     }
 
@@ -778,40 +791,37 @@ async function setupPeerConnection_Admin(sessionId, user) {
     if (card) card.style.opacity = (state === 'connected') ? '1' : '0.6';
 
     if (state === 'connected') {
-      // Watchdog: cek di 1s, 3s, 6s — jika video masih hitam padahal stream sudah ada, re-attach
-      [1000, 3000, 6000].forEach(ms => {
-        setTimeout(() => {
-          const pe  = adminPeers.get(sessionId);
-          const vEl = document.getElementById(`video-${sessionId}`);
-          if (!pe || !vEl) return;
-          pe.videoEl = vEl; // selalu update ke elemen DOM terbaru
+      // Watchdog: cek di 6s saja (1s & 3s DIHAPUS — bentrok dengan retry 2.5s di
+      // _adminAttachStream dan watchdog 4s di ontrack → cascade reset → blank hitam).
+      // Pada titik 6s, _attachLock sudah lepas (cooldown 7s) sehingga aman attach ulang.
+      setTimeout(() => {
+        const pe  = adminPeers.get(sessionId);
+        const vEl = document.getElementById(`video-${sessionId}`);
+        if (!pe || !vEl) return;
+        pe.videoEl = vEl;
+        const hasVideo = pe.remoteStream && pe.remoteStream.getVideoTracks().length > 0;
+        // isBlank berbasis _everPlayed — jauh lebih akurat dari videoWidth/readyState
+        // karena _everPlayed hanya true saat event 'playing' benar-benar fire.
+        const isBlank = !vEl.srcObject || (vEl.paused && !vEl._everPlayed);
+        if (hasVideo && isBlank) {
+          console.warn(`[Watchdog 6s] ${sessionId} masih blank — re-attach`);
+          _adminAttachStream(vEl, pe.remoteStream);
+        }
+      }, 6000);
 
-          const hasVideo = pe.remoteStream && pe.remoteStream.getVideoTracks().length > 0;
-          // BUG FIX #7 (Black Screen): Pakai readyState < 2 sebagai pengganti paused
-          // agar watchdog tidak skip saat video baru di-attach tapi belum mulai play.
-          // Paksa srcObject = null sebelum re-attach agar browser benar-benar reset stream.
-          const isBlank  = !vEl.srcObject || vEl.videoWidth === 0 || vEl.readyState < 2;
-          if (hasVideo && isBlank) {
-            console.warn(`[Watchdog ${ms}ms] ${sessionId} masih blank (readyState=${vEl.readyState}) — re-attach`);
-            vEl.srcObject = null; // reset paksa sebelum attach ulang
-            _adminAttachStream(vEl, pe.remoteStream);
-          }
-        }, ms);
-      });
-
-      // Jika setelah 8 detik sama sekali tidak ada video track → rebuild seluruh peer
+      // Jika setelah 10 detik sama sekali tidak ada video track → rebuild seluruh peer
       setTimeout(() => {
         const pe = adminPeers.get(sessionId);
         if (!pe) return;
         const hasVideo = pe.remoteStream && pe.remoteStream.getVideoTracks().length > 0;
         if (!hasVideo && document.getElementById(`card-${sessionId}`)) {
-          console.warn(`[Watchdog 8s] ${sessionId} — tidak ada track, rebuild peer`);
+          console.warn(`[Watchdog 10s] ${sessionId} — tidak ada track sama sekali, rebuild peer`);
           try { pc.close(); } catch {}
           adminPeers.delete(sessionId);
           adminAudioMeters.delete(sessionId);
           setupPeerConnection_Admin(sessionId, user);
         }
-      }, 8000);
+      }, 10000);
     }
 
     if (state === 'failed' || state === 'disconnected') {
