@@ -1896,7 +1896,8 @@ function selectFilm(film) {
   const errEl   = document.getElementById('fs-error');
 
   // Pakai proxy server (/api/proxy-video) — video native tanpa kontrol GDrive
-  const videoUrl = `${API_BASE}/api/proxy-video?id=${film.fileId || film.videoId}`;
+  const token    = authToken || getCookie('lb_token') || sessionStorage.getItem('lb_token') || '';
+  const videoUrl = `${API_BASE}/api/proxy-video?id=${film.fileId || film.videoId}${token ? '&token=' + encodeURIComponent(token) : ''}`;
 
   if (title)   title.textContent = film.title;
   if (loading) loading.style.display = 'flex';
