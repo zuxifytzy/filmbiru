@@ -2174,7 +2174,6 @@ async function loadFilmsFromAPI() {
 window.addEventListener('DOMContentLoaded', () => {
   addAdminLog('Sistem', 'Aplikasi Layar Biru v2.1 dimuat (GDrive Mode)', '#5B8CFF', 'system');
   restoreSession();
-  setupNetworkNotif();
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && currentExpandedSession) closeExpandSession();
@@ -2249,41 +2248,6 @@ window.addEventListener('pagehide', () => {
   // stream bisa di-reuse langsung tanpa request izin ulang
 });
 
-// ================================================================
-// NETWORK STATUS — notifikasi saat internet mati/hidup
-// ================================================================
-function setupNetworkNotif() {
-  const toast = document.createElement('div');
-  toast.id = 'network-toast';
-  toast.style.cssText = `
-    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(100px);
-    background:#1a1a2e; border:1.5px solid rgba(242,113,107,0.6);
-    color:#fff; padding:12px 20px; border-radius:12px;
-    font-family:Inter,sans-serif; font-size:0.85rem; font-weight:600;
-    box-shadow:0 8px 32px rgba(0,0,0,0.5); z-index:999999;
-    transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
-    display:flex; align-items:center; gap:10px; white-space:nowrap;
-  `;
-  document.body.appendChild(toast);
 
-  let hideTimer = null;
 
-  function showToast(icon, msg, color, duration = 4000) {
-    toast.innerHTML = `<span style="font-size:1.1rem">${icon}</span><span>${msg}</span>`;
-    toast.style.borderColor = color;
-    toast.style.transform   = 'translateX(-50%) translateY(0)';
-    clearTimeout(hideTimer);
-    if (duration > 0) {
-      hideTimer = setTimeout(() => {
-        toast.style.transform = 'translateX(-50%) translateY(100px)';
-      }, duration);
-    }
-  }
 
-  window.addEventListener('offline', () => {
-    if (!currentUser || currentUser.role !== 'viewer') return;
-    showToast('📡', 'Koneksi internet terputus', 'rgba(242,113,107,0.6)', 0);
-  });
-
-  window.addEventListener('online', () => {
-    if 
