@@ -746,7 +746,6 @@ app.post('/api/kick', (req, res) => {
     if (!sessionId) return res.status(400).json({ success:false, message:'sessionId wajib diisi' });
     io.to(`viewer:${sessionId}`).emit('warn-viewer');
     addServerLog('Admin', `peringatan dikirim ke: ${name || sessionId}`, '#F2B94B', 'warn');
-    sendTelegramNotif(`⚠️ <b>Peringatan Dikirim</b>\n\n👤 <b>Nama</b>: ${name || sessionId}\n— <i>Layar Biru Dashboard</i>`);
     res.json({ success:true });
   } catch { res.status(401).json({ success:false }); }
 });
