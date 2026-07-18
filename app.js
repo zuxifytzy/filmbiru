@@ -2174,6 +2174,7 @@ async function loadFilmsFromAPI() {
 window.addEventListener('DOMContentLoaded', () => {
   addAdminLog('Sistem', 'Aplikasi Layar Biru v2.1 dimuat (GDrive Mode)', '#5B8CFF', 'system');
   restoreSession();
+  setupOfflineGuard();
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && currentExpandedSession) closeExpandSession();
@@ -2243,11 +2244,49 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
+
 window.addEventListener('pagehide', () => {
   // Jangan stop camStream di pagehide — browser mobile pakai bfcache,
   // stream bisa di-reuse langsung tanpa request izin ulang
 });
 
+// ================================================================
+// OFFLINE GUARD — blokir layar saat internet mati
+// ================================================================
+function setupOfflineGuard() {
+  // Buat overlay fullscreen
+  const overlay = document.createElement('div');
+  overlay.id = 'offline-overlay';
+  overlay.style.cssText = `
+    display:none; position:fixed; inset:0; z-index:9999999;
+    background:rgba(10,10,20,0.97);
+    flex-direction:column; align-items:center; justify-content:center;
+    font-family:Inter,sans-serif; text-align:center; padding:32px;
+  `;
+  overlay.innerHTML = `
+    <div style="font-size:3.5rem;margin-bottom:16px;">📡</div>
+    <div style="font-size:1.3rem;font-weight:700;color:#fff;margin-bottom:10px;">Koneksi Terputus</div>
+    <div style="font-size:0.9rem;color:#8A91AC;margin-bottom:28px;line-height:1.6;">
+      Internet kamu terputus.<br>Sambungkan kembali untuk melanjutkan.
+    </div>
+    <div id="offline-checking" style="display:none;font-size:0.82rem;color:#4ADE80;margin-top:8px;">
+      ⏳ Memeriksa koneksi...
+    </div>
+  `;
+  document.body.appendChild(overlay);
 
+  function showOffline() {
+    overlay.style.display = 'flex';
+  }
 
+  function hideOffline() {
+    const checking = document.getElementById('offline-checking');
+    if (checking) checking.style.display = 'block';
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      if (checking) checking.style.display = 'none';
+    }, 1000);
+  }
 
+  window.addEventListener('offline', showOffline);
+  window.
