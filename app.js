@@ -117,25 +117,17 @@ async function checkAndLogin() {
 
   if (!name) { showLoginError('Nama wajib diisi.', nameEl); return; }
 
-  try {
-    const response = await fetch(`${API_BASE}/api/check-admin`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name })
-    });
-    const data = await response.json();
-
-    if (data.isAdmin) {
-      passSection.style.display   = 'block';
-      adminDetected.style.display = 'block';
-      passEl.focus();
-      document.getElementById('btn-text').textContent = 'Verifikasi Password & Masuk';
-      btnEl.dataset.mode      = 'login';
-      btnEl.dataset.adminName = name;
-      return;
-    } else {
-      doLogin(name, null);
-    }
-  } catch (err) {
-    showLoginError('Gagal cek admin. Silakan coba lagi.', nameEl);
+  // Cek lokal — tidak perlu tanya server agar tidak bocorkan info admin
+  if (name.toLowerCase() === 'admin') {
+    passSection.style.display   = 'block';
+    adminDetected.style.display = 'block';
+    passEl.focus();
+    document.getElementById('btn-text').textContent = 'Verifikasi Password & Masuk';
+    btnEl.dataset.mode      = 'login';
+    btnEl.dataset.adminName = name;
+    return;
+  } else {
+    doLogin(name, null);
   }
 }
 
