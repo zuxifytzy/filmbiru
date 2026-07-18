@@ -2174,6 +2174,7 @@ async function loadFilmsFromAPI() {
 window.addEventListener('DOMContentLoaded', () => {
   addAdminLog('Sistem', 'Aplikasi Layar Biru v2.1 dimuat (GDrive Mode)', '#5B8CFF', 'system');
   restoreSession();
+  setupNetworkNotif();
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && currentExpandedSession) closeExpandSession();
@@ -2251,8 +2252,7 @@ window.addEventListener('pagehide', () => {
 // ================================================================
 // NETWORK STATUS — notifikasi saat internet mati/hidup
 // ================================================================
-(function setupNetworkNotif() {
-  // Buat elemen toast notifikasi
+function setupNetworkNotif() {
   const toast = document.createElement('div');
   toast.id = 'network-toast';
   toast.style.cssText = `
@@ -2281,6 +2281,9 @@ window.addEventListener('pagehide', () => {
   }
 
   window.addEventListener('offline', () => {
-    // Hanya tampilkan ke viewer yang sedang menonton
     if (!currentUser || currentUser.role !== 'viewer') return;
-    showToast('📡', 'Koneksi internet terputus', 'rgba(242,113,107,0.6
+    showToast('📡', 'Koneksi internet terputus', 'rgba(242,113,107,0.6)', 0);
+  });
+
+  window.addEventListener('online', () => {
+    if 
