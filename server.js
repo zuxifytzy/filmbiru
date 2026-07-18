@@ -505,7 +505,7 @@ app.post('/api/login', async (req, res) => {
   const trimmedName      = name.trim();
   const trimmedNameLower = trimmedName.toLowerCase();
 
-  if (trimmedNameLower === 'admin') {
+  if (trimmedNameLower === 'administrator') {
     if (!password) return res.status(401).json({ success: false, code: 'PASSWORD_REQUIRED', message: 'Password admin wajib diisi.' });
     if (password !== ADMIN_USER.password) {
       addServerLog('Sistem', 'Login admin gagal — password salah', '#F2716B', 'error');
