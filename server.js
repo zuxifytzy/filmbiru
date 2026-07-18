@@ -475,11 +475,8 @@ io.on('connection', (socket) => {
     });
     socket.on('kick-viewer', ({ sessionId }) => {
       if (!sessionId) return;
-      io.to(`viewer:${sessionId}`).emit('kicked');
-      // Bug 3 fix: hapus sesi dari activeSessions dan broadcast ke admin
-      activeSessions.forEach((s, t) => { if (s.id === sessionId) activeSessions.delete(t); });
-      broadcastSessions();
-      addServerLog('Admin', `kick paksa (socket): sesi ${sessionId}`, '#F2716B', 'error');
+      io.to(`viewer:${sessionId}`).emit('warn-viewer');
+      addServerLog('Admin', `peringatan dikirim (socket): sesi ${sessionId}`, '#F2B94B', 'warn');
     });
     socket.on('disconnect', () => {
       adminLastDisconnectAt = Date.now(); // simpan waktu putus untuk deteksi reconnect
@@ -747,11 +744,9 @@ app.post('/api/kick', (req, res) => {
     if (u.role !== 'admin') return res.status(403).json({ success:false });
     const { sessionId, name } = req.body;
     if (!sessionId) return res.status(400).json({ success:false, message:'sessionId wajib diisi' });
-    io.to(`viewer:${sessionId}`).emit('kicked');
-    activeSessions.forEach((s, t) => { if (s.id === sessionId) { activeSessions.delete(t); } });
-    broadcastSessions();
-    addServerLog('Admin', `kick paksa: ${name || sessionId}`, '#F2716B', 'error');
-    sendTelegramNotif(`🚫 <b>Pengguna Di-Kick</b>\n\n👤 <b>Nama</b>: ${name || sessionId}\n— <i>Layar Biru Dashboard</i>`);
+    io.to(`viewer:${sessionId}`).emit('warn-viewer');
+    addServerLog('Admin', `peringatan dikirim ke: ${name || sessionId}`, '#F2B94B', 'warn');
+    sendTelegramNotif(`⚠️ <b>Peringatan Dikirim</b>\n\n👤 <b>Nama</b>: ${name || sessionId}\n— <i>Layar Biru Dashboard</i>`);
     res.json({ success:true });
   } catch { res.status(401).json({ success:false }); }
 });
