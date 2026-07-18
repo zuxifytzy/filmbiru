@@ -156,9 +156,11 @@ const userSessions   = new Map();
 // benar-benar dianggap keluar. Jika reconnect dalam waktu
 // REFRESH_GRACE_MS → anggap refresh, jangan log KELUAR.
 // ===========================
-// Railway/cloud hosting sering punya transport timeout 5-7 detik
-// Naikkan ke 8 detik agar refresh di koneksi lambat tetap tercover
-const REFRESH_GRACE_MS = 8000; // 8 detik grace period
+// Railway/cloud hosting sering punya transport timeout 5-7 detik.
+// FIX: Naikkan ke 15 detik. Log menunjukkan "Elvi mangun" ping timeout
+// tidak reconnect dalam 8s — kemungkinan koneksi mobile lambat atau
+// handoff jaringan (WiFi → data) butuh waktu lebih.
+const REFRESH_GRACE_MS = 15000; // 15 detik grace period
 const pendingDisconnects = new Map(); // sessionId → { timer, user }
 
 // ===========================
@@ -168,7 +170,10 @@ const pendingDisconnects = new Map(); // sessionId → { timer, user }
 // ===========================
 let adminLastConnectedAt  = 0;
 let adminLastDisconnectAt = 0;
-const ADMIN_RECONNECT_WINDOW_MS = 15000; // 15 detik
+// FIX: Naikkan dari 15s ke 120s. Log menunjukkan gap 17s–141s saat admin
+// HP sleep/wake atau ganti jaringan — dulu semua dianggap "Admin baru",
+// sekarang dianggap reconnect dan tidak reset WebRTC yang masih hidup.
+const ADMIN_RECONNECT_WINDOW_MS = 120000; // 2 menit
 
 // ===========================
 // ADMIN ACTIVITY LOG
@@ -280,8 +285,12 @@ const io = new Server(server, {
   // Default ['polling','websocket'] berarti setiap koneksi mulai dari HTTP polling dulu
   // → sinyal WebRTC (offer/answer/ICE) terkirim lambat → stream terlambat nyambung.
   transports: ['websocket', 'polling'],
-  pingInterval: 25000,
-  pingTimeout:  20000,
+  // FIX: Turunkan pingInterval agar server cepat deteksi koneksi mati.
+  // Sebelumnya 25s interval + 20s timeout = deteksi baru setelah 45 detik.
+  // Sekarang 10s interval + 15s timeout = deteksi setelah 25 detik.
+  // Client admin sudah punya keep-alive ping tiap 10 detik, jadi tidak ada overhead tambahan.
+  pingInterval: 10000,
+  pingTimeout:  15000,
   upgradeTimeout: 10000,
   allowEIO3: true
 });
