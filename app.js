@@ -1407,10 +1407,10 @@ function handleKicked() {
       <div style="font-size:2.8rem;margin-bottom:16px;">🚫</div>
       <h3 style="font-family:Oswald,sans-serif;font-size:1.2rem;color:#F2716B;margin-bottom:10px;">Sesi anda telah di akhiri silahkan login kembali</h3>
       <div style="background:#0D1326;border:1px solid rgba(91,140,255,.2);border-radius:10px;padding:12px 14px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:1.4rem;">🌐</span>
+        <span style="font-size:1.4rem;">💡</span>
         <p style="font-size:.82rem;color:#8A91AC;margin:0;text-align:left;line-height:1.6;">
-          Pastikan anda membuka website ini melalui<br>
-          <strong style="color:#fff;">Google Chrome</strong> untuk pengalaman terbaik.
+          Internet lemah atau ruangan anda gelap, pastikan<br>
+          <strong style="color:#fff;">pencahayaan anda cukup</strong> untuk memverifikasi usia.
         </p>
       </div>
       <button onclick="document.getElementById('kicked-overlay').remove();resetLogin();showScreen('screen-login');"
