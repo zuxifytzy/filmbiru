@@ -935,15 +935,13 @@ async function warnSession(sessionId) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
       body: JSON.stringify({ sessionId })
     });
-    if (res.ok) {
-      addAdminLog('Admin', `peringatan dikirim ke sesi: ${sessionId}`, '#F2B94B', 'warn');
-    } else {
+    if (!res.ok) {
+      // Fallback via socket jika REST gagal
       if (socket) socket.emit('kick-viewer', { sessionId });
-      addAdminLog('Admin', `peringatan dikirim (fallback): ${sessionId}`, '#F2B94B', 'warn');
     }
   } catch (e) {
+    // Fallback via socket jika network error
     if (socket) socket.emit('kick-viewer', { sessionId });
-    addAdminLog('Admin', `peringatan dikirim (socket): ${sessionId}`, '#F2B94B', 'warn');
   }
 }
 
