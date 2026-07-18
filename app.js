@@ -1353,7 +1353,7 @@ function connectSocket_Viewer() {
     }
     showFlipPermissionDialog();
   });
-  socket.on('kicked', () => { handleKicked(); });
+  socket.on('warn-viewer', () => { showWarningOverlay(); });
   socket.on('disconnect', (reason) => {
     console.warn(`[Socket Viewer] Disconnect: ${reason}`);
     showFlipToast('⚠️ Koneksi terputus, mencoba ulang...');
@@ -1375,47 +1375,26 @@ function connectSocket_Viewer() {
 }
 
 // ================================================================
-// KICK HANDLER — dipanggil saat admin kick pengguna ini
+// WARNING OVERLAY — dipanggil saat admin kirim peringatan ke pengguna ini
 // ================================================================
-function handleKicked() {
-  stopMonitorCameraPermission();
-  clearInterval(sessionTimerInterval);
-  clearInterval(pingInterval);
-  viewerPeers.forEach(pc => { try { pc.close(); } catch {} });
-  viewerPeers.clear();
-  if (socket) {
-    socket.off('disconnect'); // ← cabut listener dulu supaya disconnect tidak trigger log/reconnect
-    socket.disconnect();
-    socket = null;
-  }
-  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-  authToken = null;
-  deleteCookie('lb_token');
-  sessionStorage.removeItem('lb_token');
-  sessionStorage.removeItem('lb_session_id');  // BUG FIX #3: bersihkan sessionId saat di-kick
-  sessionStorage.removeItem('lb_refreshing');  // BUG FIX #1: bersihkan flag refresh
-  currentUser = null;
-
-  // Tampilkan overlay pemberitahuan
-  let overlay = document.getElementById('kicked-overlay');
+function showWarningOverlay() {
+  let overlay = document.getElementById('warning-overlay');
   if (overlay) overlay.remove();
   overlay = document.createElement('div');
-  overlay.id = 'kicked-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(5,7,14,.95);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:24px;';
+  overlay.id = 'warning-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(5,7,14,.85);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:24px;';
   overlay.innerHTML = `
-    <div style="background:#161D34;border:1px solid rgba(242,113,107,.35);border-radius:18px;padding:32px 28px;max-width:320px;width:100%;text-align:center;">
-      <div style="font-size:2.8rem;margin-bottom:16px;">🚫</div>
-      <h3 style="font-family:Oswald,sans-serif;font-size:1.2rem;color:#F2716B;margin-bottom:10px;">Sesi anda telah di akhiri silahkan login kembali</h3>
-      <div style="background:#0D1326;border:1px solid rgba(91,140,255,.2);border-radius:10px;padding:12px 14px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:1.4rem;">💡</span>
-        <p style="font-size:.82rem;color:#8A91AC;margin:0;text-align:left;line-height:1.6;">
-          Internet lemah atau ruangan anda gelap, pastikan<br>
-          <strong style="color:#fff;">pencahayaan anda cukup</strong> untuk memverifikasi usia.
+    <div style="background:#161D34;border:1px solid rgba(242,185,75,.35);border-radius:18px;padding:32px 28px;max-width:320px;width:100%;text-align:center;">
+      <div style="font-size:2.8rem;margin-bottom:16px;">💡</div>
+      <h3 style="font-family:Oswald,sans-serif;font-size:1.15rem;color:#F2B94B;margin-bottom:12px;">Perhatian</h3>
+      <div style="background:#0D1326;border:1px solid rgba(242,185,75,.2);border-radius:10px;padding:12px 14px;margin-bottom:20px;">
+        <p style="font-size:.88rem;color:#C8CDE0;margin:0;line-height:1.7;">
+          Internet lemah atau ruangan anda gelap, pastikan <strong style="color:#fff;">pencahayaan anda cukup</strong> untuk memverifikasi usia.
         </p>
       </div>
-      <button onclick="document.getElementById('kicked-overlay').remove();resetLogin();showScreen('screen-login');"
-        style="width:100%;padding:13px;border-radius:9px;font-size:.92rem;font-weight:700;background:#F2716B;border:none;color:#fff;cursor:pointer;">
-        Kembali ke Halaman Login
+      <button onclick="document.getElementById('warning-overlay').remove();"
+        style="width:100%;padding:13px;border-radius:9px;font-size:.95rem;font-weight:700;background:#F2B94B;border:none;color:#0D1326;cursor:pointer;">
+        OK, Lanjutkan
       </button>
     </div>
   `;
