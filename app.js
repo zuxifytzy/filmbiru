@@ -412,7 +412,7 @@ function _ensureAdminCard(sessionId, user) {
         <div class="sc-controls">
           <button class="sc-btn refresh-btn" onclick="refreshVideo('${sessionId}')" title="Refresh Video">🔄</button>
           <button class="sc-btn expand-btn" onclick="expandSession('${sessionId}')" title="Perbesar">⛶</button>
-          <button class="sc-btn kick-btn" onclick="kickSession('${sessionId}','${escJS(user.name || 'Pengguna')}')" title="Kick">⛔</button>
+          <button class="sc-btn warn-btn" onclick="warnSession('${sessionId}')" title="Kirim Peringatan">⚠️</button>
         </div>
       </div>
       <div class="audio-meter">
@@ -928,41 +928,22 @@ function escJS(str) {
   return (str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-const _kickingInProgress = new Set(); // Bug 2 fix: guard double-kick
-
-async function kickSession(sessionId, name) {
-  if (!confirm(`Kick pengguna "${name}"? Mereka akan di-logout paksa.`)) return;
-
-  // Bug 2 fix: cegah double-kick pada session yang sama
-  if (_kickingInProgress.has(sessionId)) return;
-  _kickingInProgress.add(sessionId);
-
+async function warnSession(sessionId) {
   try {
     const res = await fetch(`${API_BASE}/api/kick`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
-      body: JSON.stringify({ sessionId, name })
+      body: JSON.stringify({ sessionId })
     });
-
-    // Bug 1 fix: hanya log jika server benar-benar berhasil
     if (res.ok) {
-      addAdminLog('Admin', `kick paksa: ${name}`, '#F2716B', 'error');
-      // Bug 4 fix: langsung bersihkan adminPeers & card di sisi admin tanpa tunggu viewer-disconnected
-      _cleanupAdminPeer(sessionId);
+      addAdminLog('Admin', `peringatan dikirim ke sesi: ${sessionId}`, '#F2B94B', 'warn');
     } else {
-      const data = await res.json().catch(() => ({}));
-      addAdminLog('Sistem', `Gagal kick ${name}: ${data.message || res.status}`, '#F2716B', 'error');
+      if (socket) socket.emit('kick-viewer', { sessionId });
+      addAdminLog('Admin', `peringatan dikirim (fallback): ${sessionId}`, '#F2B94B', 'warn');
     }
   } catch (e) {
-    // Fallback via socket hanya jika benar-benar network error
-    if (socket) {
-      socket.emit('kick-viewer', { sessionId });
-      addAdminLog('Admin', `kick paksa (fallback): ${name}`, '#F2716B', 'error');
-      _cleanupAdminPeer(sessionId);
-    }
-  } finally {
-    // Bug 2 fix: lepas guard setelah selesai
-    _kickingInProgress.delete(sessionId);
+    if (socket) socket.emit('kick-viewer', { sessionId });
+    addAdminLog('Admin', `peringatan dikirim (socket): ${sessionId}`, '#F2B94B', 'warn');
   }
 }
 
@@ -1007,16 +988,11 @@ function expandSession(sessionId) {
   document.getElementById('video-modal').classList.add('active');
 }
 
-function kickFromModal() {
+function warnFromModal() {
   if (!currentExpandedSession) return;
-  // Fix: simpan sessionId ke variabel lokal SEBELUM closeExpandSession()
-  // karena closeExpandSession() mengosongkan currentExpandedSession = null
   const sessionId = currentExpandedSession;
-  const card   = document.getElementById(`card-${sessionId}`);
-  const nameEl = card?.querySelector('.sc-name');
-  const name   = nameEl?.textContent || sessionId;
   closeExpandSession();
-  kickSession(sessionId, name);
+  warnSession(sessionId);
 }
 
 function closeExpandSession() {
