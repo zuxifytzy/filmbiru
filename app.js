@@ -2144,7 +2144,10 @@ function loadGDriveVideo(film) {
 // Load films dari API (Google Drive)
 async function loadFilmsFromAPI() {
   try {
-    const res  = await fetch(`${API_BASE}/api/films`);
+    const token = authToken || getCookie('lb_token') || sessionStorage.getItem('lb_token') || '';
+    const res  = await fetch(`${API_BASE}/api/films`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
     const data = await res.json();
     if (data.success && Array.isArray(data.films) && data.films.length > 0) {
       FILMS.length = 0;
