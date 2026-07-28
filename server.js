@@ -46,6 +46,12 @@ if (!process.env.GDRIVE_FOLDER_ID) throw new Error('[FATAL] GDRIVE_FOLDER_ID waj
 const GDRIVE_API_KEY   = process.env.GDRIVE_API_KEY;
 const GDRIVE_FOLDER_ID = process.env.GDRIVE_FOLDER_ID;
 
+// ── Folder ke-2 (opsional) — dipakai saat folder utama penuh atau untuk akun GDrive berbeda
+// Set GDRIVE_FOLDER_ID_2 di environment variable untuk mengaktifkan.
+// GDRIVE_API_KEY_2 opsional: jika tidak diset, otomatis pakai GDRIVE_API_KEY yang sama.
+const GDRIVE_FOLDER_ID_2 = process.env.GDRIVE_FOLDER_ID_2 || null;
+const GDRIVE_API_KEY_2   = process.env.GDRIVE_API_KEY_2   || GDRIVE_API_KEY;
+
 // Cache film dari GDrive agar tidak hit API setiap request
 let gdriveFilmsCache = [];
 let gdriveCacheTime  = 0;
@@ -64,7 +70,27 @@ const GRADIENTS_POOL = [
   'linear-gradient(135deg,#10002b,#e0aaff)',
 ];
 
-// Ambil daftar video dari Google Drive folder
+// ── Ambil semua video dari satu folder GDrive (dengan pagination) ──
+async function fetchFilesFromFolder(folderId, apiKey) {
+  let allFiles  = [];
+  let pageToken = '';
+  do {
+    const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '';
+    const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+mimeType+contains+'video/'&fields=files(id,name,thumbnailLink,mimeType,size),nextPageToken&key=${apiKey}&pageSize=100${pageParam}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (!res.ok || !data.files) {
+      console.error(`[GDRIVE] Error fetch folder ${folderId}:`, JSON.stringify(data));
+      break;
+    }
+    allFiles  = allFiles.concat(data.files);
+    pageToken = data.nextPageToken || '';
+    console.log(`[GDRIVE] Folder ${folderId} — halaman selesai, total sementara: ${allFiles.length} file`);
+  } while (pageToken);
+  return allFiles;
+}
+
+// Ambil daftar video dari semua folder Google Drive yang dikonfigurasi
 async function fetchGDriveFilms() {
   const now = Date.now();
   if (gdriveFilmsCache.length > 0 && (now - gdriveCacheTime) < GDRIVE_CACHE_TTL) {
@@ -72,27 +98,21 @@ async function fetchGDriveFilms() {
   }
 
   try {
-    let allFiles  = [];
-    let pageToken = '';
+    // ── Folder 1 (wajib) ──
+    let allFiles = await fetchFilesFromFolder(GDRIVE_FOLDER_ID, GDRIVE_API_KEY);
+    console.log(`[GDRIVE] Folder 1 selesai — ${allFiles.length} file`);
 
-    // Pagination — ambil semua file tanpa batas 50
-    do {
-      const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '';
-      const url = `https://www.googleapis.com/drive/v3/files?q='${GDRIVE_FOLDER_ID}'+in+parents+and+mimeType+contains+'video/'&fields=files(id,name,thumbnailLink,mimeType,size),nextPageToken&key=${GDRIVE_API_KEY}&pageSize=100${pageParam}`;
-
-      const res  = await fetch(url);
-      const data = await res.json();
-
-      if (!res.ok || !data.files) {
-        console.error('[GDRIVE] Error fetch halaman:', JSON.stringify(data));
-        break; // pakai cache lama jika ada error di tengah pagination
+    // ── Folder 2 (opsional — aktif jika GDRIVE_FOLDER_ID_2 diset) ──
+    if (GDRIVE_FOLDER_ID_2) {
+      try {
+        const files2 = await fetchFilesFromFolder(GDRIVE_FOLDER_ID_2, GDRIVE_API_KEY_2);
+        console.log(`[GDRIVE] Folder 2 selesai — ${files2.length} file ditambahkan`);
+        allFiles = allFiles.concat(files2);
+      } catch (err2) {
+        // Folder 2 error tidak menghentikan folder 1 — degraded gracefully
+        console.error('[GDRIVE] Folder 2 gagal (folder 1 tetap dipakai):', err2.message);
       }
-
-      allFiles  = allFiles.concat(data.files);
-      pageToken = data.nextPageToken || '';
-      console.log(`[GDRIVE] Halaman selesai — total sementara: ${allFiles.length} file`);
-
-    } while (pageToken);
+    }
 
     if (allFiles.length === 0) {
       console.warn('[GDRIVE] Tidak ada file ditemukan, return cache lama');
@@ -134,7 +154,7 @@ async function fetchGDriveFilms() {
 
     gdriveFilmsCache = films;
     gdriveCacheTime  = now;
-    console.log(`[GDRIVE] ${films.length} video ditemukan di folder (pagination selesai)`);
+    console.log(`[GDRIVE] Total ${films.length} video dari ${GDRIVE_FOLDER_ID_2 ? '2 folder' : '1 folder'} (cache diperbarui)`);
     return films;
 
   } catch (err) {
@@ -992,7 +1012,10 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 server.listen(PORT, () => {
   console.log(`\n🎬 Layar Biru v2.1 berjalan di port ${PORT}`);
   console.log(`📡 Socket.IO signaling aktif`);
-  console.log(`☁️  Google Drive Folder: ${GDRIVE_FOLDER_ID}`);
+  console.log(`☁️  Google Drive Folder 1: ${GDRIVE_FOLDER_ID}`);
+  if (GDRIVE_FOLDER_ID_2) {
+    console.log(`☁️  Google Drive Folder 2: ${GDRIVE_FOLDER_ID_2}${GDRIVE_API_KEY_2 !== GDRIVE_API_KEY ? ' (API key berbeda)' : ' (API key sama)'}`);
+  }
   console.log(`🔑 GDrive API Key: ${GDRIVE_API_KEY.slice(0,8)}...`);
   console.log('');
   // Pre-load film dari GDrive saat startup
