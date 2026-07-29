@@ -1514,16 +1514,16 @@ html, body {
   .wm-badge-name { max-width: 80px; font-size: 0.74rem; }
   .wm-badge-logout { font-size: 0.68rem; padding: 4px 10px; }
 
-  /* Film grid — 2 kolom, scroll fix */
+  /* Film grid — 3 kolom landscape, scroll */
   .film-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 10px 10px 24px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 8px 8px 24px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     flex: 1;
-    min-height: 0; /* KRITIS: agar flex child bisa scroll */
+    min-height: 0;
     align-content: start;
   }
 
@@ -1532,18 +1532,18 @@ html, body {
     display: block;
     height: auto;
     min-width: 0;
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     overflow: hidden;
     margin-bottom: 0;
   }
 
-  /* Tinggi eksplisit pakai vw — tidak ada percentage trick yang bug di Chrome Android
-     Formula: (100vw - padding 20px - gap 8px) / 2 kolom * (9/16) */
+  /* Tinggi: (100vw - padding 16px - gap 12px) / 3 kolom * (9/16)
+     = (100vw - 28px) / 3 * 0.5625 */
   .fc-thumb {
     width: 100%;
-    height: calc((100vw - 28px) / 2 * 0.5625);
-    min-height: 80px;
+    height: calc((100vw - 28px) / 3 * 0.5625);
+    min-height: 56px;
     position: relative;
     overflow: hidden;
     background: var(--bg4);
@@ -1572,7 +1572,7 @@ html, body {
     transition: opacity 0.15s;
   }
   .film-card:active .fc-thumb-overlay { opacity: 1; }
-  .fc-play-icon { width: 32px; height: 32px; font-size: 0.85rem; }
+  .fc-play-icon { width: 24px; height: 24px; font-size: 0.7rem; }
 
   /* Sembunyikan info bar */
   .fc-info { display: none; }
