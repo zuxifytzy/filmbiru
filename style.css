@@ -1513,45 +1513,42 @@ html, body {
   .wm-badge-name { max-width: 80px; font-size: 0.74rem; }
   .wm-badge-logout { font-size: 0.68rem; padding: 4px 10px; }
 
-  /* Film list — 1 kolom vertikal, scroll */
+  /* Film grid — 2 kolom responsif, thumbnail only */
   .film-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    padding: 8px 12px 20px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 10px 10px 24px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     flex: 1;
-    grid-template-columns: unset;
+    align-content: start;
   }
 
-  /* Kartu = baris horizontal */
+  /* Kartu = hanya thumbnail, tanpa info bar */
   .film-card {
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
+    display: block;
     height: auto;
-    min-height: 68px;
     min-width: 0;
     border-radius: 10px;
-    margin-bottom: 8px;
     border: 1px solid var(--border);
     overflow: hidden;
+    margin-bottom: 0;
   }
 
-  /* Thumbnail kecil di kiri — explicit px agar tidak collapse di Chrome Android */
+  /* Thumbnail full-width dengan tinggi eksplisit */
   .fc-thumb {
-    width: 120px;
-    min-width: 120px;
-    flex-shrink: 0;
-    height: 68px;
-    min-height: 68px;
-    border-radius: 8px 0 0 8px;
+    width: 100%;
+    min-width: unset;
+    flex-shrink: unset;
+    height: 0;
+    min-height: unset;
+    padding-top: 56.25%; /* 16:9 fallback */
+    border-radius: 0;
     overflow: hidden;
     background: var(--bg4);
     position: relative;
     aspect-ratio: unset;
-    padding-top: 0;
   }
   .fc-thumb img {
     position: absolute;
@@ -1564,33 +1561,18 @@ html, body {
   .fc-thumb-overlay {
     position: absolute;
     inset: 0;
+    background: rgba(0,0,0,0.35);
     display: flex;
     align-items: center;
     justify-content: center;
     opacity: 0;
+    transition: opacity 0.15s;
   }
   .film-card:active .fc-thumb-overlay { opacity: 1; }
-  .fc-play-icon { width: 28px; height: 28px; font-size: 0.75rem; }
+  .fc-play-icon { width: 32px; height: 32px; font-size: 0.85rem; }
 
-  /* Info di kanan */
-  .fc-info {
-    flex: 1;
-    padding: 10px 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-  .fc-play-btn { width: 22px; height: 22px; font-size: 0.55rem; flex-shrink: 0; }
-  .fc-title {
-    font-size: 0.78rem;
-    white-space: normal;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-  }
+  /* Sembunyikan info bar (judul) */
+  .fc-info { display: none; }
 
   /* Admin screen */
   .admin-sidebar { display: none; }
