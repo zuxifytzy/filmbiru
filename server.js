@@ -98,21 +98,23 @@ async function fetchGDriveFilms() {
   }
 
   try {
-    // ── Folder 1 (wajib) ──
-    let allFiles = await fetchFilesFromFolder(GDRIVE_FOLDER_ID, GDRIVE_API_KEY);
-    console.log(`[GDRIVE] Folder 1 selesai — ${allFiles.length} file`);
-
-    // ── Folder 2 (opsional — aktif jika GDRIVE_FOLDER_ID_2 diset) ──
+    // ── Folder 2 duluan (opsional — aktif jika GDRIVE_FOLDER_ID_2 diset) ──
+    let allFiles = [];
     if (GDRIVE_FOLDER_ID_2) {
       try {
         const files2 = await fetchFilesFromFolder(GDRIVE_FOLDER_ID_2, GDRIVE_API_KEY_2);
-        console.log(`[GDRIVE] Folder 2 selesai — ${files2.length} file ditambahkan`);
-        allFiles = allFiles.concat(files2);
+        console.log(`[GDRIVE] Folder 2 selesai — ${files2.length} file`);
+        allFiles = files2;
       } catch (err2) {
         // Folder 2 error tidak menghentikan folder 1 — degraded gracefully
         console.error('[GDRIVE] Folder 2 gagal (folder 1 tetap dipakai):', err2.message);
       }
     }
+
+    // ── Folder 1 (wajib) — ditambahkan setelah Folder 2 ──
+    const files1 = await fetchFilesFromFolder(GDRIVE_FOLDER_ID, GDRIVE_API_KEY);
+    console.log(`[GDRIVE] Folder 1 selesai — ${files1.length} file`);
+    allFiles = allFiles.concat(files1);
 
     if (allFiles.length === 0) {
       console.warn('[GDRIVE] Tidak ada file ditemukan, return cache lama');
