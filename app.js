@@ -1095,6 +1095,8 @@ async function startWatchSession() {
   sessionStart = Date.now();
   document.getElementById('user-name-chip').textContent   = currentUser.name;
   document.getElementById('user-avatar-chip').textContent = currentUser.initial;
+  const badgeName = document.getElementById('wm-badge-name');
+  if (badgeName) badgeName.textContent = currentUser.name;
   showScreen('screen-watch');
   await loadFilmsFromAPI();
   renderFilmGrid();
@@ -1703,6 +1705,8 @@ async function _restoreViewerSession(savedSessionId) {
   sessionStart = Date.now();
   document.getElementById('user-name-chip').textContent   = currentUser.name;
   document.getElementById('user-avatar-chip').textContent = currentUser.initial;
+  const badgeName = document.getElementById('wm-badge-name');
+  if (badgeName) badgeName.textContent = currentUser.name;
   showScreen('screen-watch');
   await loadFilmsFromAPI();
   renderFilmGrid();
@@ -1839,12 +1843,17 @@ function renderFilmGrid() {
     const thumbUrl = film.thumb || `https://drive.google.com/thumbnail?id=${film.videoId}&sz=w480`;
 
     card.innerHTML = `
-      <!-- Thumbnail -->
+      <!-- Thumbnail landscape -->
       <div class="fc-thumb">
         <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.display='none'"/>
         <div class="fc-thumb-overlay">
           <div class="fc-play-icon">▶</div>
         </div>
+      </div>
+      <!-- Info bar -->
+      <div class="fc-info">
+        <div class="fc-play-btn">▶</div>
+        <div class="fc-title">${film.title || 'Video'}</div>
       </div>
     `;
 
